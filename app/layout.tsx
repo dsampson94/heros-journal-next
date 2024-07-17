@@ -6,14 +6,13 @@ import React from 'react';
 import ServiceWorker from '../components/ServiceWorker';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-
     return (
         <html lang="en">
         <head>
             <title>Heros Journal</title>
-            <ServiceWorker />
+            <ServiceWorker/>
         </head>
-        <body>{ children }</body>
+        <body className="flex h-full flex-col">{ children }</body>
         </html>
     );
 };
