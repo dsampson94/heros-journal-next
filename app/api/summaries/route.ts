@@ -1,60 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient } from 'mongodb';
-import nodemailer from 'nodemailer';
-import { getServerSession } from 'next-auth';
+import { verifyToken } from '../../../lib/server';
+import connectToDatabase from '../../../lib/mongoose';
+import VoiceNote from '../../../lib/models/VoiceNote';
+import { sendEmail } from '../../../lib/nodemailer';
+import axios from 'axios';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
-const EMAIL_HOST = process.env.EMAIL_HOST!;
-const EMAIL_PORT = parseInt(process.env.EMAIL_PORT!);
-const EMAIL_USER = process.env.EMAIL_USER!;
-const EMAIL_PASS = process.env.EMAIL_PASS!;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-export async function POST(req: NextRequest) {
-    const session = await getServerSession({ req });
-
-    if (!session) {
-        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
-    }
-
-    const client = new MongoClient(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+export async function GET(req: NextRequest) {
+    await connectToDatabase();
+    const { id: userId } = verifyToken(req);
 
     try {
-        await client.connect();
-        const db = client.db('yourDatabaseName');
-        const users = await db.collection('users').find({}).toArray();
+        const voiceNotes = await VoiceNote.find({ userId });
 
-        for (const user of users) {
-            const voiceNotes = await db.collection('voiceNotes').find({ userId: user._id }).toArray();
-            const summary = generateSummary(voiceNotes); // Implement this function to summarize the notes
+        // Collect all transcriptions
+        const transcriptions = voiceNotes.map(note => note.transcription).join('\n');
 
-            await sendEmail(user.email, summary);
-        }
+        // Prepare data for OpenAI API
+        const response = await axios.post(
+            'https://api.openai.com/v1/chat/completions',
+            {
+                model: 'gpt-4o-mini',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an analysis assistant.'
+                    },
+                    {
+                        role: 'user',
+                        content: `Analyze the following transcriptions and provide an overall summary and key insights:\n\n${transcriptions}`
+                    }
+                ],
+                max_tokens: 150,
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
 
-        return NextResponse.json({ message: 'Summaries sent' }, { status: 200 });
+        const analysis = response.data.choices[0].message.content.trim();
+
+        await sendEmail('user@example.com', 'Your VoiceNote Summary', analysis);
+
+        return NextResponse.json({ analysis });
     } catch (error) {
-        console.error(error);
-        return NextResponse.json({ message: 'Error sending summaries', error: error.message }, { status: 500 });
-    } finally {
-        await client.close();
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
-
-const sendEmail = async (to: string, summary: string) => {
-    const transporter = nodemailer.createTransport({
-        host: EMAIL_HOST,
-        port: EMAIL_PORT,
-        auth: {
-            user: EMAIL_USER,
-            pass: EMAIL_PASS,
-        },
-    });
-
-    const mailOptions = {
-        from: EMAIL_USER,
-        to,
-        subject: 'Your VoiceNote Summary',
-        text: summary,
-    };
-
-    await transporter.sendMail(mailOptions);
-};
