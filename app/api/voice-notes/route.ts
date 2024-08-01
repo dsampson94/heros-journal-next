@@ -3,6 +3,11 @@ import { verifyToken } from '../../../lib/server';
 import connectToDatabase from '../../../lib/mongoose';
 import VoiceNote from '../../../lib/models/VoiceNote';
 import User from '../../../lib/models/User';
+import axios from 'axios';
+import FormData from 'form-data';
+import { Buffer } from 'buffer';
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 export async function GET(req: NextRequest) {
     await connectToDatabase();
@@ -27,12 +32,37 @@ export async function POST(req: NextRequest) {
     }
 
     try {
+        // Convert Blob to Buffer
         const audioBlob = audio as Blob;
-        const audioURL = URL.createObjectURL(audioBlob); // This is for testing, replace with actual storage logic
-        const transcription = 'Dummy transcription'; // Replace with actual transcription logic
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
 
+        // Prepare form-data for Whisper API
+        const form = new FormData();
+        form.append('file', buffer, { filename: 'audio.wav' });
+        form.append('model', 'whisper-1');
+
+        // Call the Whisper API for transcription
+        const whisperResponse = await axios.post(
+            'https://api.openai.com/v1/audio/transcriptions',
+            form,
+            {
+                headers: {
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                    ...form.getHeaders()
+                }
+            }
+        );
+
+        const transcription = whisperResponse.data.text;
+
+        // Convert audio buffer to base64 and create audio URL
+        const audioBase64 = buffer.toString('base64');
+        const audioURL = `data:audio/wav;base64,${audioBase64}`;
+
+        // Save voice note to the database
         const voiceNote = new VoiceNote({
-            audioURL,
+            audioURL, // Storing the audio as base64 URL
             transcription,
             temporaryUserId: temporaryUserId ? temporaryUserId.toString() : undefined,
             userId: temporaryUserId ? undefined : verifyToken(req).id,

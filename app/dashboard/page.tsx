@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { getAuthHeaders } from '../../lib/auth';
+import Analysis from '../../components/Analysis';
 
 const Dashboard: React.FC = () => {
     const [isRecording, setIsRecording] = useState(false);
@@ -16,15 +17,13 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         const userId = localStorage.getItem('userId');
         setUserId(userId);
-        if (userId) {
-            fetchVoiceNotes(userId);
-        }
+        fetchVoiceNotes();
     }, []);
 
-    const fetchVoiceNotes = async (userId: string) => {
+    const fetchVoiceNotes = async () => {
         try {
             const headers = getAuthHeaders();
-            const response = await axios.get(`/api/voice-notes?userId=${ userId }`, { headers });
+            const response = await axios.get(`/api/voice-notes`, { headers });
             setVoiceNotes(response.data);
         } catch (error) {
             console.error('Error fetching voice notes:', error);
@@ -59,6 +58,7 @@ const Dashboard: React.FC = () => {
                     const response = await axios.post('/api/voice-notes', formData, { headers });
                     setTranscription(response.data.transcription);
                     setVoiceNotes([...voiceNotes, {
+                        _id: response.data._id,
                         audioURL: response.data.audioURL,
                         transcription: response.data.transcription
                     }]);
@@ -72,35 +72,54 @@ const Dashboard: React.FC = () => {
         }
     };
 
+    const handleDeleteVoiceNote = async (voiceNoteId: string) => {
+        try {
+            const headers = getAuthHeaders();
+            await axios.delete(`/api/voice-notes/${voiceNoteId}`, { headers });
+            setVoiceNotes(voiceNotes.filter(note => note._id !== voiceNoteId));
+        } catch (error) {
+            console.error('Error deleting voice note:', error);
+        }
+    };
+
     return (
         <div className="dashboard min-h-screen bg-gray-100 p-4">
             <h1 className="text-2xl font-bold mb-4">Your Voice Notes</h1>
             <button
-                onClick={ handleStartStopRecording }
+                onClick={handleStartStopRecording}
                 className="btn btn-primary px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
             >
-                { isRecording ? 'Stop Recording' : 'Start Recording' }
+                {isRecording ? 'Stop Recording' : 'Start Recording'}
             </button>
-            { audioURL && (
+            {audioURL && (
                 <div className="mt-4">
-                    <audio src={ audioURL } controls className="w-full mb-2"/>
-                    <p className="text-gray-700">{ transcription }</p>
+                    <audio src={audioURL} controls className="w-full mb-2" />
+                    <p className="text-gray-700">{transcription}</p>
                 </div>
-            ) }
+            )}
+            <Analysis />
             <div className="voice-notes mt-8">
                 <h2 className="text-xl font-bold mb-2">Previous Voice Notes</h2>
-                { voiceNotes.length === 0 ? (
+                {voiceNotes.length === 0 ? (
                     <p className="text-gray-600">No voice notes found.</p>
                 ) : (
                     <ul className="space-y-4">
-                        { voiceNotes.map((note, index) => (
-                            <li key={ index } className="p-4 bg-white rounded shadow">
-                                <audio src={ note.audioURL } controls className="w-full mb-2"/>
-                                <p className="text-gray-700">{ note.transcription }</p>
+                        {voiceNotes.map((note) => (
+                            <li key={note._id} className="p-4 bg-white rounded shadow flex items-center justify-between">
+                                <div className="flex-grow">
+                                    <audio src={note.audioURL} controls className="w-full mb-2" />
+                                    <p className="text-gray-700">{note.transcription}</p>
+                                </div>
+                                <button
+                                    onClick={() => handleDeleteVoiceNote(note._id)}
+                                    className="btn btn-danger px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition ml-4"
+                                >
+                                    Delete
+                                </button>
                             </li>
-                        )) }
+                        ))}
                     </ul>
-                ) }
+                )}
             </div>
         </div>
     );
