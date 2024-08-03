@@ -13,7 +13,6 @@ export async function GET(req: NextRequest) {
     try {
         const voiceNotes = await VoiceNote.find({ userId });
 
-        // Collect all transcriptions
         const transcriptions = voiceNotes.map(note => note.transcription).join('\n');
 
         // Prepare data for OpenAI API
