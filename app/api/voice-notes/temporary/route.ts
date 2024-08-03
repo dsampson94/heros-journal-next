@@ -17,7 +17,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Audio file missing' }, { status: 400 });
     }
 
-    // Simulating AI transcription for demonstration purposes
     const transcription = 'This is a simulated transcription.';
 
     try {
