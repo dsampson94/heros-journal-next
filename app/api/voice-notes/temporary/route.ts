@@ -2,12 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectToDatabase from '../../../../lib/mongoose';
 import VoiceNote from '../../../../lib/models/VoiceNote';
 
-export const config = {
-    api: {
-        bodyParser: false, // Disable body parsing, so we can handle it as raw form data
-    },
-};
-
 export async function POST(req: NextRequest) {
     await connectToDatabase();
 
